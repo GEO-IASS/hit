@@ -1,0 +1,2 @@
+module Detection.MatchedFilter where
+
