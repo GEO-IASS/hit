@@ -29,7 +29,6 @@ readHyperData path = do
   let numBands = case nbands properties of
                    Nothing -> 0
                    Just x  -> x
-  let totalSize = numLines * numSamples
   let scale = case reflectanceScaleFactor properties of
                 Nothing -> 1 
                 Just x  -> x
