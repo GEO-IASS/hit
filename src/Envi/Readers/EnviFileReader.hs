@@ -26,14 +26,27 @@ readHyperData path = do
   let numSamples = case nsamples properties of
                      Nothing -> 0
                      Just x  -> x
+  let numBands = case nbands properties of
+                   Nothing -> 0
+                   Just x  -> x
   let totalSize = numLines * numSamples
   let scale = case reflectanceScaleFactor properties of
                 Nothing -> 1 
                 Just x  -> x
-  rawFile <- fromByteString (Z :. totalSize :: DIM1) <$> B.readFile path
-  rawData <- computeP $ R.map (/scale) $ R.map fromIntegral rawFile :: IO (Array U DIM1 Double)  
-  return $ HyperCube rawData properties -- TODO: return cube or lib depending on file type
-  -- TODO: reshape according to interleave. I think repa has an interleave func
+  -- TODO: generalize reshaping to DIM3 for all three interleaves
+  rawFile <- fromByteString (Z :. numLines :. numBands :. numSamples :: DIM3) <$>
+    B.readFile path
+  let rawData = R.map (/scale) $ R.map fromIntegral rawFile :: Array D DIM3 Double  
+  -- TODO: generalize _ to BIP backpermuting
+  permutedData <- computeP $ bilToBip rawData
+  return $ HyperCube permutedData properties -- TODO: return cube or lib depending on file type
+
+-- TODO: bsq to bip
+bilToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
+bilToBip cube = backpermute e flop cube
+  where
+    e@(Z :. x :. y :. z) = extent cube
+    flop (Z :. x :. y :. z) = (Z:. x :. z :. y)
 
 readHeaderFile :: FilePath -> IO (Either (Map.Map k a) Properties)
 readHeaderFile path = do
