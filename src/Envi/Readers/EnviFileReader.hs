@@ -32,18 +32,16 @@ readHyperData path = do
   let scale = case reflectanceScaleFactor properties of
                 Nothing -> 1 
                 Just x  -> x
-  -- TODO: generalize reshaping to DIM3 for all three interleaves
+  -- TODO: generalize shaping raw data to DIM3 for all three interleaves
   rawFile <- fromByteString (Z :. numLines :. numBands :. numSamples :: DIM3) <$>
     B.readFile path
   let rawData = R.map (/scale) $ R.map fromIntegral rawFile :: Array D DIM3 Double  
-  -- TODO: generalize _ to BIP backpermuting
+  -- TODO: generalized function for _ to BIP backpermuting
   let permutedData = bilToBip rawData
-  -- TODO: generalize reshaping to nbands x npixels
   reshapedData <- computeP $ reshape (Z:. numBands :. (numLines * numSamples) :: DIM2) permutedData
-  -- TODO: reshape to total size x nbands
   return $ HyperCube reshapedData properties -- TODO: return cube or lib depending on file type
 
--- TODO: bsq to bip
+-- TODO: bsq to bip, etc
 bilToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
 bilToBip cube = backpermute e flop cube
   where
