@@ -37,8 +37,11 @@ readHyperData path = do
     B.readFile path
   let rawData = R.map (/scale) $ R.map fromIntegral rawFile :: Array D DIM3 Double  
   -- TODO: generalize _ to BIP backpermuting
-  permutedData <- computeP $ bilToBip rawData
-  return $ HyperCube permutedData properties -- TODO: return cube or lib depending on file type
+  let permutedData = bilToBip rawData
+  -- TODO: generalize reshaping to nbands x npixels
+  reshapedData <- computeP $ reshape (Z:. numBands :. (numLines * numSamples) :: DIM2) permutedData
+  -- TODO: reshape to total size x nbands
+  return $ HyperCube reshapedData properties -- TODO: return cube or lib depending on file type
 
 -- TODO: bsq to bip
 bilToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
