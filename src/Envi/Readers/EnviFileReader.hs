@@ -4,6 +4,8 @@ import Control.Applicative ( (<$>) )
 import Data.List ( intersperse )
 import Data.Array.Repa.Repr.ByteString
 import Data.Array.Repa as R
+import Data.Char ( toUpper )
+import Data.Maybe ( fromMaybe )
 import System.FilePath.Windows ( replaceExtension )
 import Text.Parsec as P
 import Text.Parsec.String ( parseFromFile )
@@ -18,35 +20,43 @@ type Properties = Map.Map String [String]
 readHyperData :: FilePath -> IO HyperData
 readHyperData path = do
   let headerFilePath = replaceExtension path ".hdr" 
-  (Right headerContents) <- readHeaderFile headerFilePath -- TODO: handle this better
+  (Right headerContents) <- readHeaderFile headerFilePath 
   let properties = makeHyperDataProperties headerContents
-  let numLines = case nlines properties of
-                   Nothing -> 0
-                   Just x  -> x
-  let numSamples = case nsamples properties of
-                     Nothing -> 0
-                     Just x  -> x
-  let numBands = case nbands properties of
-                   Nothing -> 0
-                   Just x  -> x
-  let scale = case reflectanceScaleFactor properties of
-                Nothing -> 1 
-                Just x  -> x
-  -- TODO: generalize shaping raw data to DIM3 for all three interleaves
-  rawFile <- fromByteString (Z :. numLines :. numBands :. numSamples :: DIM3) <$>
-    B.readFile path
+  let numLines = fromMaybe 0 $ nlines properties
+  let numSamples = fromMaybe 0 $ nsamples properties
+  let numBands = fromMaybe 0 $ nbands properties
+  let scale = fromMaybe 1 $ reflectanceScaleFactor properties
+  let interleave' = fromMaybe "BIP" $ interleave properties
+  let shape = shapeOfInterleave interleave' numSamples numLines numBands
+  rawFile <- fromByteString shape <$> B.readFile path
   let rawData = R.map (/scale) $ R.map fromIntegral rawFile :: Array D DIM3 Double  
-  -- TODO: generalized function for _ to BIP backpermuting
-  let permutedData = bilToBip rawData
+  let permutedData = permuteOnInterleave rawData interleave'
   reshapedData <- computeP $ reshape (Z:. numBands :. (numLines * numSamples) :: DIM2) permutedData
   return $ HyperCube reshapedData properties -- TODO: return cube or lib depending on file type
 
--- TODO: bsq to bip, etc
+shapeOfInterleave :: String -> Int -> Int -> Int -> DIM3
+shapeOfInterleave i s l b
+  | Prelude.map toUpper i == "BIL" = (Z :. l :. b :. s :: DIM3)  
+  | Prelude.map toUpper i == "BSQ" = (Z :. b :. l :. s :: DIM3)
+  | otherwise = (Z :. s :. l :. b :: DIM3)
+
+permuteOnInterleave :: Array D DIM3 e -> String -> Array D DIM3 e
+permuteOnInterleave cube i
+  | Prelude.map toUpper i == "BIL" = bilToBip cube
+  | Prelude.map toUpper i == "BSQ" = bsqToBip cube
+  | otherwise = cube
+
 bilToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
 bilToBip cube = backpermute e flop cube
   where
     e@(Z :. x :. y :. z) = extent cube
     flop (Z :. x :. y :. z) = (Z:. x :. z :. y)
+
+bsqToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
+bsqToBip cube = backpermute e flop cube
+  where
+    e@(Z :. x :. y :. z) = extent cube
+    flop (Z :. x :. y :. z) = (Z:. z :. y :. x)
 
 readHeaderFile :: FilePath -> IO (Either (Map.Map k a) Properties)
 readHeaderFile path = do
