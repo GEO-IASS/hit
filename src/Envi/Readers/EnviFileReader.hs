@@ -42,21 +42,16 @@ shapeOfInterleave i s l b
 
 permuteOnInterleave :: Array D DIM3 e -> String -> Array D DIM3 e
 permuteOnInterleave cube i
-  | Prelude.map toUpper i == "BIL" = bilToBip cube
-  | Prelude.map toUpper i == "BSQ" = bsqToBip cube
+  | Prelude.map toUpper i == "BIL" || Prelude.map toUpper i == "BSQ" = toBip cube i
   | otherwise = cube
 
-bilToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
-bilToBip cube = backpermute e flop cube
+toBip :: (Source r e) => Array r DIM3 e -> String -> Array D DIM3 e
+toBip cube i = backpermute e flop cube
   where
     e@(Z :. x :. y :. z) = extent cube
-    flop (Z :. x :. y :. z) = (Z:. x :. z :. y)
-
-bsqToBip :: (Source r e) => Array r DIM3 e -> Array D DIM3 e
-bsqToBip cube = backpermute e flop cube
-  where
-    e@(Z :. x :. y :. z) = extent cube
-    flop (Z :. x :. y :. z) = (Z:. z :. y :. x)
+    flop (Z :. x :. y :. z) 
+      | Prelude.map toUpper i == "BIL" = (Z :. x :. z :. y)
+      | Prelude.map toUpper i == "BSQ" = (Z :. z :. y :. x)
 
 readHeaderFile :: FilePath -> IO (Either (Map.Map k a) Properties)
 readHeaderFile path = do
